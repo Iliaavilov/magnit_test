@@ -185,6 +185,9 @@ class training:
         :rtype: dictionary
         '''
 
+        best_iters = []
+        best_cv = []
+
         for fold in cv_trans[:-1]:
             nn_training_initialised = self.nn_training(self.nn_model, X, y)
             val_losses = nn_training_initialised.train(params_trans = params_trans, val_fold = True)
