@@ -224,6 +224,7 @@ class training:
 
         ## Множество параметров моделей
         params = params_func(trial, X)
+        neptune.log_text('logged_params', str(params))
 
         X_trans, y_trans, cv_trans, params_trans = preprocessing.preprocessing(X.copy(),
                                                                                y.copy(),
