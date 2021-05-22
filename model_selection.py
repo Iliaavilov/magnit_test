@@ -45,8 +45,8 @@ class training:
     def initiate_neptune_exp(self, name = None, description = None,
                              params = None, properties = None,
                              tags = None,
-                             upload_source_files = ['cv.py', 'model_selection.py', 'nn_model.py',
-                                                    'nn_training.py', 'preprocessing.py']):
+                             upload_source_files = ('cv.py', 'model_selection.py', 'nn_model.py',
+                                                    'nn_training.py', 'preprocessing.py')):
         '''Инициализация neptune.ai эксперимента
         :param name: название эксперимента
         :type name: str
