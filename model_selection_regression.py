@@ -286,15 +286,18 @@ class training:
         :rtype: float
         '''
 
-        ## Множество параметров моделей
+        # Множество параметров моделей
         params = params_func(trial, X)
+        # Логируем параметры в neptune
         neptune.log_text('logged_params', str(params))
 
+        # Предобработка параметров и данных (если нужна)
         X_trans, y_trans, cv_trans, params_trans = preprocessing.preprocessing(X.copy(),
                                                                                y.copy(),
                                                                                copy.deepcopy(cv),
                                                                                copy.deepcopy(params))
 
+        # Обучение модели и логирование результатов
         if model == 'lgbm':
             results_dict = self.lgbm_cv_test(X_trans,
                                              y_trans,
@@ -302,8 +305,8 @@ class training:
                                              params_trans)
 
             neptune.log_metric('metric_mean_cv', results_dict['loss_mean_cv'])
-            neptune.log_metric('metric_test', results_dict['loss_std_cv'])
-            neptune.log_metric('metric_std_cv', results_dict['loss_test'])
+            neptune.log_metric('metric_test', results_dict['loss_test'])
+            neptune.log_metric('metric_std_cv', results_dict['loss_std_cv'])
             neptune.log_metric('iterations', results_dict['iterations'])
 
         if model == 'sklearn':
@@ -313,8 +316,8 @@ class training:
                                                 params_trans)
 
             neptune.log_metric('metric_mean_cv', results_dict['loss_mean_cv'])
-            neptune.log_metric('metric_test', results_dict['loss_std_cv'])
-            neptune.log_metric('metric_std_cv', results_dict['loss_test'])
+            neptune.log_metric('metric_test', results_dict['loss_test'])
+            neptune.log_metric('metric_std_cv', results_dict['loss_std_cv'])
 
 
         if model == 'torch':
@@ -325,8 +328,8 @@ class training:
                                             params_trans)
 
             neptune.log_metric('metric_mean_cv', results_dict['loss_mean_cv'])
-            neptune.log_metric('metric_test', results_dict['loss_std_cv'])
-            neptune.log_metric('metric_std_cv', results_dict['loss_test'])
+            neptune.log_metric('metric_test', results_dict['loss_test'])
+            neptune.log_metric('metric_std_cv', results_dict['loss_std_cv'])
             neptune.log_metric('iterations', results_dict['iterations'])
 
         return results_dict['loss_mean_cv']
