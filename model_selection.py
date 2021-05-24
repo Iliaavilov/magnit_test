@@ -5,6 +5,8 @@ import lightgbm as lgb
 import preprocessing
 import neptune
 from neptunecontrib.monitoring.optuna import NeptuneCallback
+from sklearn.model_selection import cross_validate
+from sklearn.metrics import make_scorer
 
 
 class training:
@@ -94,7 +96,7 @@ class training:
         :param X: фичи для обучения модели
         :type X: numpy 2d array
         :param y: таргет для обучения модели
-        :type y: numpy 2d array of shape (-1, 1)
+        :type y: numpy 1d array
         :param cv_trans: индексы кросс валидации
         :type cv_trans: iterable of (train_inex, test_index)
         :param params_trans: словарь параметров
@@ -114,7 +116,7 @@ class training:
         params_trans.pop('early_stopping_rounds')
         params_trans.pop('categorical_feature')
         params_trans.pop('feature_name')
-        def lgb_scoring(y_hat, data, validation_loss = validation_loss):
+        def lgb_scoring(y_hat, data, validation_loss = validation_loss, is_higher_better = self.direction):
             '''Подсчет loss для early stopping в lgbm
             :param y_hat: предсказанный таргет
             :type y_hat: array
@@ -123,6 +125,8 @@ class training:
             :param validation_loss: функция, возвращающая лосс (принимает первым аргументом y_true - реальный таргет,
                                                                           вторым аргуметром y_hat - предсказанный таргет)
             :type validation_loss: func
+            :param is_higher_better: Направление оптимизации (maximize or minimize)
+            :type is_higher_better: str
             :return: 'val_loss' (названия столбца с функцией потерь),
                       validation_loss(y_true, y_hat) (значение функции потерь)
                       True/False - максизировать или минимизировать validation_loss
@@ -130,7 +134,12 @@ class training:
             :rtype: tuple
             '''
             y_true = data.get_label()
-            return 'val_loss', validation_loss(y_true, y_hat), False
+
+            if is_higher_better == 'maximize':
+                is_higher_better = True
+            else:
+                is_higher_better = False
+            return 'val_loss', validation_loss(y_true, y_hat), is_higher_better
 
         y = y.reshape(-1, 1)
 
@@ -166,6 +175,54 @@ class training:
                 'loss_std_cv':cv_model['val_loss-stdv'][-1],
                 'loss_test': test_loss,
                 'iterations': len(cv_model['val_loss-mean'])}
+
+    def sklearn_cv_test(self, X, y, cv_trans, params_trans):
+        '''Тренировка sklearn модели на валидационной и тестовой части с заданными параметрами
+        :param X: фичи для обучения модели
+        :type X: numpy 2d array
+        :param y: таргет для обучения модели
+        :type y: numpy 1d array
+        :param cv_trans: индексы кросс валидации
+        :type cv_trans: iterable of (train_inex, test_index)
+        :param params_trans: словарь параметров
+        :type params_trans: dictionary
+        :return: dictionary with keys 'loss_mean_cv' (mean loss on cross validation),
+                                      'loss_std_cv' (std of loss on validation folds)
+                                      'loss_test' (loss on test)
+        :rtype: dictionary
+        '''
+
+        estimator = params_trans['estimator']
+        validation_loss = params_trans['validation_loss']
+        params_trans.pop('estimator')
+        params_trans.pop('validation_loss')
+
+        def sklearn_scoring(validation_loss = validation_loss, is_higher_better = self.direction):
+            '''Подсчет loss для early stopping в lgbm
+            :param validation_loss: функция, возвращающая лосс (принимает первым аргументом y_true - реальный таргет,
+                                                                          вторым аргуметром y_hat - предсказанный таргет)
+            :type validation_loss: func
+            :return: sklearn.metrics.make_scorer - функция, возвращающая score в sklearn cross_validate
+            :rtype: sklearn.metrics.make_scorer
+            '''
+
+            if is_higher_better == 'maximize':
+                is_higher_better = True
+            else:
+                is_higher_better = False
+
+            return make_scorer(validation_loss, greater_is_better = is_higher_better)
+
+        scoring = sklearn_scoring(validation_loss = validation_loss, is_higher_better = self.direction)
+
+        y = y.reshape(-1, 1)
+        estimator_initialised = estimator(**params_trans)
+        scores = cross_validate(estimator_initialised, X, y, scoring = scoring)
+
+
+        return {'loss_mean_cv': np.mean(scores['test_score'][:-1]*(-1)),
+                'loss_std_cv': np.std(scores['test_score'][:-1]),
+                'loss_test': scores['test_score'][-1]*(-1)}
 
 
     def nn_cv_test(self, X, y, cv_trans, params_trans):
@@ -241,6 +298,16 @@ class training:
             neptune.log_metric('metric_test', results_dict['loss_std_cv'])
             neptune.log_metric('metric_std_cv', results_dict['loss_test'])
             neptune.log_metric('iterations', results_dict['iterations'])
+
+        if model == 'sklearn':
+            results_dict = self.sklearn_cv_test(X_trans,
+                                                y_trans,
+                                                cv_trans,
+                                                params_trans)
+
+            neptune.log_metric('metric_mean_cv', results_dict['loss_mean_cv'])
+            neptune.log_metric('metric_test', results_dict['loss_std_cv'])
+            neptune.log_metric('metric_std_cv', results_dict['loss_test'])
 
 
         if model == 'torch':
