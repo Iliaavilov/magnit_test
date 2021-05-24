@@ -217,12 +217,19 @@ class training:
 
         y = y.reshape(-1, 1)
         estimator_initialised = estimator(**params_trans)
-        scores = cross_validate(estimator_initialised, X, y, scoring = scoring)
+        scores = cross_validate(estimator_initialised,
+                                X,
+                                y,
+                                cv = cv_trans,
+                                scoring = scoring)
 
-
-        return {'loss_mean_cv': np.mean(scores['test_score'][:-1]*(-1)),
+        if self.direction == 'maximize':
+            coef = 1
+        else:
+            coef = -1
+        return {'loss_mean_cv': np.mean(scores['test_score'][:-1]*coef),
                 'loss_std_cv': np.std(scores['test_score'][:-1]),
-                'loss_test': scores['test_score'][-1]*(-1)}
+                'loss_test': scores['test_score'][-1]*coef}
 
 
     def nn_cv_test(self, X, y, cv_trans, params_trans):
