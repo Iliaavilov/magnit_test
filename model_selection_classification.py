@@ -197,32 +197,54 @@ class training:
         params_trans.pop('estimator')
         params_trans.pop('validation_loss')
 
-        def sklearn_scoring(validation_loss = validation_loss, is_higher_better = self.direction):
-            '''Подсчет loss для early stopping в lgbm
-            :param validation_loss: функция, возвращающая лосс (принимает первым аргументом y_true - реальный таргет,
-                                                                          вторым аргуметром y_hat - предсказанный таргет)
-            :type validation_loss: func
-            :return: sklearn.metrics.make_scorer - функция, возвращающая score в sklearn cross_validate
-            :rtype: sklearn.metrics.make_scorer
-            '''
+        def threshold_grid_search(y_true, y_pred):
+            thresholds = np.linspace(0, 1)
+            scores = []
+            best_threshold = []
+            for threshold in thresholds:
+                y_pred_classes = np.where(y_pred > threshold, 1, 0)
+                scores.append(validation_loss(y_true, y_pred_classes))
+            max_ind = scores.index(max(scores))
+            best_threshold.append(thresholds[max_ind])
 
-            if is_higher_better == 'maximize':
-                is_higher_better = True
-            else:
-                is_higher_better = False
+            return best_threshold
 
-            return make_scorer(validation_loss, greater_is_better = is_higher_better)
 
-        scoring = sklearn_scoring(validation_loss = validation_loss, is_higher_better = self.direction)
 
         y = y.reshape(-1, 1)
         estimator_initialised = estimator(**params_trans)
-        scores = cross_validate(estimator_initialised, X, y, scoring = scoring)
+        estimators = cross_validate(estimator_initialised,
+                                    X,
+                                    y,
+                                    cv = cv_trans,
+                                    return_estimator = True)['estimator']
+        y_pred_prob_all = np.array([])
+        y_true_all = np.array([])
+
+        for i, estimator in enumerate(estimators):
+            y_pred_prob = estimator.predict_proba(X[cv_trans[i][1], :])[:, 1]
+            y_true = y[cv_trans[i][1]]
+            y_pred_prob_all = np.append(y_pred_prob_all, y_pred_prob)
+            y_true_all = np.append(y_true_all, y_true)
+
+        best_threshold = threshold_grid_search(y_true_all, y_pred_prob_all)
+        scores = []
+
+        for i, estimator in enumerate(estimators):
+            y_pred_prob = estimator.predict_proba(X[cv_trans[i][1], :])[:, 1]
+            y_true = y[cv_trans[i][1]]
+            y_pred_class = np.where(y_pred_prob>best_threshold, 1, 0)
+            scores.append(validation_loss(y_true, y_pred_class))
 
 
-        return {'loss_mean_cv': np.mean(scores['test_score'][:-1]*(-1)),
-                'loss_std_cv': np.std(scores['test_score'][:-1]),
-                'loss_test': scores['test_score'][-1]*(-1)}
+
+        if self.direction == 'maximize':
+            coef = 1
+        else:
+            coef = -1
+        return {'loss_mean_cv': np.mean(scores[:-1]*coef),
+                'loss_std_cv': np.std(scores[:-1]),
+                'loss_test': scores[-1]*coef}
 
 
     def nn_cv_test(self, X, y, cv_trans, params_trans):
