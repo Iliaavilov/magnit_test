@@ -1,5 +1,7 @@
 # Тестовое задание в Магнит (2021)
 
+Страница neptune с логированными экспериментами: https://app.neptune.ai/iliaavilov/Magnit-test
+
 ## Про репозиторий
 
 1. Classification_task.ipynb - решение тестовой задачи с классификацией
